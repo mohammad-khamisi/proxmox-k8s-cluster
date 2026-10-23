@@ -33,6 +33,18 @@ resource "proxmox_virtual_environment_vm" "this" {
     dedicated = var.memory_mb
   }
 
+  bios          = var.bios
+  scsi_hardware = var.scsi_hardware
+
+  # UEFI templates: keep the cloned EFI vars disk.
+  dynamic "efi_disk" {
+    for_each = var.bios == "ovmf" ? [1] : []
+    content {
+      datastore_id = var.datastore_id
+      type         = "4m"
+    }
+  }
+
   boot_order = [var.disk_interface]
 
   # The template's disk on the same interface, grown to disk_gb.
@@ -45,6 +57,7 @@ resource "proxmox_virtual_environment_vm" "this" {
   }
 
   network_device {
+    model   = var.network_model
     bridge  = var.bridge
     vlan_id = var.vlan_id
   }

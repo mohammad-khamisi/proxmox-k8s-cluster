@@ -33,9 +33,9 @@ variable "proxmox_node" {
 # Template and VM hardware
 # ---------------------------------------------------------------------------
 variable "template_id" {
-  description = "Cloud-init template to full-clone (8000 = template-rocky-10-proxmox)"
+  description = "Template to full-clone (104 = template-rocky-10-50go)"
   type        = number
-  default     = 8000
+  default     = 104
 }
 
 variable "template_node" {
@@ -56,6 +56,35 @@ variable "vm_datastore" {
   default     = "iscsi-netapp"
 }
 
+variable "bios" {
+  description = "Must match the template: 'ovmf' (UEFI) or 'seabios'"
+  type        = string
+  default     = "ovmf"
+
+  validation {
+    condition     = contains(["ovmf", "seabios"], var.bios)
+    error_message = "bios must be 'ovmf' or 'seabios'."
+  }
+}
+
+variable "scsi_hardware" {
+  description = "SCSI controller of the template (template > Hardware): pvscsi = 'VMware PVSCSI', virtio-scsi-pci / virtio-scsi-single = VirtIO SCSI"
+  type        = string
+  default     = "pvscsi"
+}
+
+variable "network_model" {
+  description = "NIC model: virtio (recommended) or vmxnet3 (as in the template)"
+  type        = string
+  default     = "virtio"
+}
+
+variable "template_disk_gb" {
+  description = "Size of the template's disk: VM disks can only be the same or bigger"
+  type        = number
+  default     = 50
+}
+
 variable "cpu_type" {
   description = "Rocky Linux 10 needs x86-64-v3: use 'host' or 'x86-64-v3' (not the kvm64/x86-64-v2 defaults)"
   type        = string
@@ -73,7 +102,7 @@ variable "agent_enabled" {
 # ---------------------------------------------------------------------------
 variable "network_bridge" {
   type    = string
-  default = "vmbr0"
+  default = "vmbr1"
 }
 
 variable "vlan_id" {
@@ -196,7 +225,7 @@ variable "jumpbox_resources" {
     memory_mb = number
     disk_gb   = number
   })
-  default = { cores = 2, memory_mb = 2048, disk_gb = 30 }
+  default = { cores = 2, memory_mb = 2048, disk_gb = 50 }
 }
 
 # ---------------------------------------------------------------------------

@@ -5,10 +5,14 @@ proxmox_api_token = "terraform@pve!provider=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 proxmox_insecure  = true
 proxmox_node      = "hvir111d"
 
-# Template 8000 (template-rocky-10-proxmox). Check its Hardware tab for the
-# boot disk interface (scsi0 / virtio0).
-template_id             = 8000
+# Template 104 (template-rocky-10-50go). These must match its Hardware tab:
+#   Hard Disk (scsi0) 50G, BIOS OVMF (UEFI), SCSI Controller VMware PVSCSI.
+template_id             = 104
 template_disk_interface = "scsi0"
+template_disk_gb        = 50
+bios                    = "ovmf"
+scsi_hardware           = "pvscsi"
+network_model           = "virtio"
 # template_node         = "hvir111d"   # only if VMs go to another node
 
 vm_datastore = "iscsi-netapp"
@@ -16,7 +20,7 @@ vm_datastore = "iscsi-netapp"
 # Rocky Linux 10 needs x86-64-v3.
 cpu_type = "host"
 
-network_bridge = "vmbr0"
+network_bridge = "vmbr1"
 # vlan_id      = 20
 gateway        = "192.168.1.1"
 dns_servers    = ["192.168.1.1", "8.8.8.8"]
@@ -54,7 +58,7 @@ workers = [
 
 master_resources  = { cores = 4, memory_mb = 8192, disk_gb = 60 }
 worker_resources  = { cores = 4, memory_mb = 8192, disk_gb = 80 }
-jumpbox_resources = { cores = 2, memory_mb = 2048, disk_gb = 30 }
+jumpbox_resources = { cores = 2, memory_mb = 2048, disk_gb = 50 }
 
 # ---------------------------------------------------------------------------
 # RKE2

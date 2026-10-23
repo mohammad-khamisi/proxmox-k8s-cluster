@@ -17,6 +17,20 @@ variable "cpu_type" {
   type        = string
   default     = "host"
 }
+variable "bios" {
+  description = "Must match the template: 'ovmf' (UEFI, needs the EFI disk) or 'seabios'"
+  type        = string
+  default     = "ovmf"
+}
+variable "scsi_hardware" {
+  description = "SCSI controller; keep the template's one so its initramfs has the driver"
+  type        = string
+  default     = "pvscsi"
+}
+variable "network_model" {
+  type    = string
+  default = "virtio"
+}
 variable "datastore_id" { type = string }
 variable "template_id" {
   description = "Template VM ID to full-clone"

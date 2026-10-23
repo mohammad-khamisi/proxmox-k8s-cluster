@@ -39,6 +39,19 @@ resource "random_password" "vm_user" {
   special = false
 }
 
+# A cloned disk cannot be smaller than the template's.
+resource "terraform_data" "validate_inputs" {
+  lifecycle {
+    precondition {
+      condition = alltrue([
+        for r in [var.master_resources, var.worker_resources, var.jumpbox_resources] :
+        r.disk_gb >= var.template_disk_gb
+      ])
+      error_message = "disk_gb of masters, workers and jumpbox must be >= template_disk_gb (${var.template_disk_gb} GB)."
+    }
+  }
+}
+
 # SSH key the jumpbox uses to reach the cluster nodes.
 resource "tls_private_key" "jumpbox" {
   algorithm = "ED25519"
@@ -59,6 +72,9 @@ module "jumpbox" {
   memory_mb      = var.jumpbox_resources.memory_mb
   disk_gb        = var.jumpbox_resources.disk_gb
   cpu_type       = var.cpu_type
+  bios           = var.bios
+  scsi_hardware  = var.scsi_hardware
+  network_model  = var.network_model
   datastore_id   = var.vm_datastore
   template_id    = var.template_id
   template_node  = local.template_node
@@ -86,6 +102,9 @@ module "master" {
   memory_mb      = var.master_resources.memory_mb
   disk_gb        = var.master_resources.disk_gb
   cpu_type       = var.cpu_type
+  bios           = var.bios
+  scsi_hardware  = var.scsi_hardware
+  network_model  = var.network_model
   datastore_id   = var.vm_datastore
   template_id    = var.template_id
   template_node  = local.template_node
@@ -113,6 +132,9 @@ module "worker" {
   memory_mb      = var.worker_resources.memory_mb
   disk_gb        = var.worker_resources.disk_gb
   cpu_type       = var.cpu_type
+  bios           = var.bios
+  scsi_hardware  = var.scsi_hardware
+  network_model  = var.network_model
   datastore_id   = var.vm_datastore
   template_id    = var.template_id
   template_node  = local.template_node

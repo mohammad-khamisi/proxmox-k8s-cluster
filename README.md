@@ -1,6 +1,6 @@
 # proxmox-k8s-cluster
 
-Terraform برای ساخت یک کلاستر Kubernetes با **RKE2 `v1.36.5+rke2r1`** روی Proxmox، با کلون کردن تمپلیت `8000` (`template-rocky-10-proxmox`):
+Terraform برای ساخت یک کلاستر Kubernetes با **RKE2 `v1.36.5+rke2r1`** روی Proxmox، با کلون کردن تمپلیت `104` (`template-rocky-10-50go`):
 
 | VM | تعداد | نقش |
 |----|-------|-----|
@@ -16,7 +16,7 @@ Terraform برای ساخت یک کلاستر Kubernetes با **RKE2 `v1.36.5+rk
 
 ## چه کار می‌کند
 
-1. هر ۷ VM را با Full Clone از تمپلیت ۸۰۰۰ می‌سازد و IP ثابت، کاربر و کلید SSH را با Cloud-Init خود Proxmox تنظیم می‌کند (فقط API، نیازی به SSH به نود Proxmox نیست).
+1. هر ۷ VM را با Full Clone از تمپلیت ۱۰۴ می‌سازد و IP ثابت، کاربر و کلید SSH را با Cloud-Init خود Proxmox تنظیم می‌کند (فقط API، نیازی به SSH به نود Proxmox نیست).
 2. با SSH به هر VM وصل می‌شود و `scripts/prepare-node.sh` را اجرا می‌کند: بزرگ کردن دیسک، `/etc/hosts`، خاموش کردن swap و firewalld، SELinux روی permissive، ماژول‌ها و sysctl های Kubernetes، `qemu-guest-agent`.
 3. `master-1` کلاستر را راه‌اندازی می‌کند (etcd)، بعد `master-2/3` و ۳ ورکر با توکن مشترک به آن join می‌شوند (`scripts/install-rke2.sh`).
 4. روی jumpbox نسخه‌ی هم‌خوان `kubectl` (`v1.36.5`) و `helm` نصب می‌شود، یک کلید SSH مخصوص jumpbox روی همه‌ی نودها قرار می‌گیرد و `kubeconfig` از `master-1` در `~/.kube/config` کپی می‌شود.
@@ -25,7 +25,7 @@ Terraform برای ساخت یک کلاستر Kubernetes با **RKE2 `v1.36.5+rk
 
 - Terraform >= 1.5 روی سیستمی که به IP های VM ها دسترسی دارد.
 - یک API Token در Proxmox (مثلاً `terraform@pve!provider`) با دسترسی ساخت و کلون VM و استفاده از datastore.
-- تمپلیت ۸۰۰۰ باید **Cloud-Init drive** داشته باشد (تب Cloud-Init) و `cloud-init` داخلش نصب باشد.
+- داخل سیستم‌عامل تمپلیت باید پکیج `cloud-init` نصب باشد. درایو Cloud-Init را Terraform خودش روی هر کلون (ide2) اضافه می‌کند و لازم نیست در تمپلیت باشد.
 - VM ها باید به اینترنت دسترسی داشته باشند (`get.rke2.io`، `dl.k8s.io`، `get.helm.sh`، مخازن dnf).
 - یک کلید SSH بدون passphrase روی سیستم شما.
 
@@ -62,8 +62,13 @@ terraform output -raw rke2_token                   # توکن join برای نو
 
 | متغیر | پیش‌فرض | توضیح |
 |-------|---------|-------|
-| `template_id` | `8000` | تمپلیت مبدأ |
+| `template_id` | `104` | تمپلیت مبدأ |
 | `template_disk_interface` | `scsi0` | اینترفیس دیسک تمپلیت (تب Hardware) |
+| `template_disk_gb` | `50` | اندازه‌ی دیسک تمپلیت؛ دیسک VM ها نمی‌تواند کوچک‌تر باشد |
+| `bios` | `ovmf` | باید مثل تمپلیت باشد (UEFI) |
+| `scsi_hardware` | `pvscsi` | کنترلر SCSI تمپلیت (VMware PVSCSI)؛ عوض کردنش ممکن است بوت را خراب کند |
+| `network_model` | `virtio` | مدل کارت شبکه (`virtio` یا `vmxnet3`) |
+| `network_bridge` | `vmbr1` | بریج شبکه |
 | `vm_datastore` | `iscsi-netapp` | محل دیسک VM ها |
 | `proxmox_node` / `node` | `hvir111d` | برای پخش VM ها بین `hvir211d` و `hvir213d`، فیلد `node` هر VM را تنظیم کنید (دیسک تمپلیت باید روی storage مشترک باشد) |
 | `vm_user` | `rocky` | کاربری که cloud-init می‌سازد |

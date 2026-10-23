@@ -24,6 +24,8 @@ for pkg in qemu-guest-agent cloud-utils-growpart curl tar iptables-nft bash-comp
   dnf -y install "$pkg" || echo "warning: could not install $pkg" >&2
 done
 systemctl enable --now qemu-guest-agent || true
+# Templates migrated from VMware: the VMware tools are useless on Proxmox.
+systemctl disable --now vmtoolsd 2>/dev/null || true
 
 # Grow the root filesystem to the disk size set by Terraform.
 grow_root() {
