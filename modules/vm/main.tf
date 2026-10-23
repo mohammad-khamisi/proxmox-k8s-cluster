@@ -36,14 +36,9 @@ resource "proxmox_virtual_environment_vm" "this" {
   bios          = var.bios
   scsi_hardware = var.scsi_hardware
 
-  # UEFI templates: keep the cloned EFI vars disk.
-  dynamic "efi_disk" {
-    for_each = var.bios == "ovmf" ? [1] : []
-    content {
-      datastore_id = var.datastore_id
-      type         = "4m"
-    }
-  }
+  # UEFI: the EFI vars disk (with the template's boot entries) comes with the
+  # clone and is deliberately not managed here, so it is never replaced by an
+  # empty one.
 
   boot_order = [var.disk_interface]
 
@@ -88,6 +83,6 @@ resource "proxmox_virtual_environment_vm" "this" {
 
   lifecycle {
     # Cloud-init only applies on first boot; don't recreate on key changes.
-    ignore_changes = [initialization[0].user_account]
+    ignore_changes = [initialization[0].user_account, efi_disk]
   }
 }
