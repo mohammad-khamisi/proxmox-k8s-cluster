@@ -1,0 +1,70 @@
+# Copy to terraform.tfvars and edit.
+
+proxmox_endpoint  = "https://192.168.1.10:8006/"
+proxmox_api_token = "terraform@pve!provider=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+proxmox_insecure  = true
+proxmox_node      = "hvir111d"
+
+# Template 8000 (template-rocky-10-proxmox). Check its Hardware tab for the
+# boot disk interface (scsi0 / virtio0).
+template_id             = 8000
+template_disk_interface = "scsi0"
+# template_node         = "hvir111d"   # only if VMs go to another node
+
+vm_datastore = "iscsi-netapp"
+
+# Rocky Linux 10 needs x86-64-v3.
+cpu_type = "host"
+
+network_bridge = "vmbr0"
+# vlan_id      = 20
+gateway        = "192.168.1.1"
+dns_servers    = ["192.168.1.1", "8.8.8.8"]
+
+vm_user = "rocky"
+ssh_public_keys = [
+  "ssh-ed25519 AAAA... you@laptop",
+]
+# Private key matching the key above (no passphrase).
+# On Windows: "C:/Users/<you>/.ssh/id_ed25519"
+ssh_private_key_path = "~/.ssh/id_ed25519"
+
+# true = Terraform reaches the nodes only through the jumpbox.
+provision_via_jumpbox = false
+
+timezone = "UTC"
+
+# ---------------------------------------------------------------------------
+# VMs. 'node' is optional: spread VMs over hvir111d / hvir211d / hvir213d if
+# the template's disk is on shared storage.
+# ---------------------------------------------------------------------------
+jumpbox = { name = "k8s-jumpbox", vm_id = 300, ip = "192.168.1.60/24" }
+
+masters = [
+  { name = "k8s-master-1", vm_id = 301, ip = "192.168.1.61/24" },
+  { name = "k8s-master-2", vm_id = 302, ip = "192.168.1.62/24" },
+  { name = "k8s-master-3", vm_id = 303, ip = "192.168.1.63/24" },
+]
+
+workers = [
+  { name = "k8s-worker-1", vm_id = 311, ip = "192.168.1.71/24" },
+  { name = "k8s-worker-2", vm_id = 312, ip = "192.168.1.72/24" },
+  { name = "k8s-worker-3", vm_id = 313, ip = "192.168.1.73/24" },
+]
+
+master_resources  = { cores = 4, memory_mb = 8192, disk_gb = 60 }
+worker_resources  = { cores = 4, memory_mb = 8192, disk_gb = 80 }
+jumpbox_resources = { cores = 2, memory_mb = 2048, disk_gb = 30 }
+
+# ---------------------------------------------------------------------------
+# RKE2
+# ---------------------------------------------------------------------------
+rke2_version        = "v1.36.5+rke2r1"
+rke2_install_method = "tar"
+rke2_cni            = "canal"
+taint_masters       = true
+selinux_permissive  = true
+
+# Optional DNS name / VIP for the API (load balancer or kube-vip in front of
+# the masters). Empty = the first master's IP.
+# api_endpoint = "k8s-api.example.local"
