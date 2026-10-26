@@ -10,3 +10,35 @@ datastore   = "iscsi-netapp"
 
 vm_id   = 400
 vm_name = "clone-test"
+
+# ---------------------------------------------------------------------------
+# Network card(s), by slot. Slots not listed keep the template's settings
+# (template 104: net0 = vmxnet3 on vmbr1).
+# ---------------------------------------------------------------------------
+network_devices = {
+  net0 = {
+    bridge = "vmbr1"
+    model  = "vmxnet3"
+    # vlan_id     = 20
+    # mac_address = "BC:24:11:00:00:01"
+    # firewall    = false
+    # mtu         = 1500
+  }
+  # Second card:
+  # net1 = { bridge = "vmbr0", model = "virtio" }
+}
+
+# ---------------------------------------------------------------------------
+# IP address (cloud-init), by slot: net0 -> first card. Needs cloud-init
+# inside the template. address = "dhcp" or "IP/prefix".
+# ---------------------------------------------------------------------------
+ip_configs = {
+  net0 = {
+    address = "192.168.1.80/24"
+    gateway = "192.168.1.1"
+  }
+  # net0 = { address = "dhcp" }
+}
+
+dns_servers = ["192.168.1.1", "8.8.8.8"]
+# dns_domain = "example.local"

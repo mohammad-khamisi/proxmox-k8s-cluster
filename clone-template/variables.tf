@@ -49,3 +49,55 @@ variable "vm_name" {
   type    = string
   default = "clone-test"
 }
+
+# ---------------------------------------------------------------------------
+# Network
+# ---------------------------------------------------------------------------
+variable "network_devices" {
+  description = "Network cards by slot (net0, net1, ...). Slots not listed keep the template's settings."
+  type = map(object({
+    bridge      = string
+    model       = optional(string) # virtio, vmxnet3, e1000
+    vlan_id     = optional(number)
+    mac_address = optional(string) # omitted = new random MAC
+    firewall    = optional(bool)
+    mtu         = optional(number)
+  }))
+  default = {}
+
+  validation {
+    condition     = alltrue([for k in keys(var.network_devices) : can(regex("^net[0-9]+$", k))])
+    error_message = "network_devices keys must be slot names like net0, net1."
+  }
+}
+
+variable "ip_configs" {
+  description = "Cloud-init IP per slot (net0 -> ipconfig0). address = 'dhcp' or CIDR like 192.168.1.80/24. Empty = template's."
+  type = map(object({
+    address = string
+    gateway = optional(string)
+  }))
+  default = {}
+
+  validation {
+    condition     = alltrue([for k in keys(var.ip_configs) : can(regex("^net[0-9]+$", k))])
+    error_message = "ip_configs keys must be slot names like net0, net1."
+  }
+
+  validation {
+    condition     = alltrue([for c in values(var.ip_configs) : c.address == "dhcp" || can(cidrhost(c.address, 0))])
+    error_message = "address must be 'dhcp' or an IP with prefix, e.g. 192.168.1.80/24."
+  }
+}
+
+variable "dns_servers" {
+  description = "Cloud-init DNS servers; empty = template's"
+  type        = list(string)
+  default     = []
+}
+
+variable "dns_domain" {
+  description = "Cloud-init search domain; empty = template's"
+  type        = string
+  default     = ""
+}
