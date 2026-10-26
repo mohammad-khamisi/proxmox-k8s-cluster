@@ -58,11 +58,6 @@ locals {
     )
   }
 
-  curl = join(" ", [
-    "curl --fail -sS",
-    var.proxmox_insecure ? "-k" : "",
-    "-H \"Authorization: PVEAPIToken=${var.proxmox_api_token}\"",
-  ])
 }
 
 # ---------------------------------------------------------------------------
@@ -120,8 +115,47 @@ resource "proxmox_cloned_vm" "this" {
 # Cloud-init IP/DNS. proxmox_cloned_vm doesn't manage cloud-init, so the
 # values are written to each new VM's config through the Proxmox API while
 # the VM is still stopped; then the VM is started, and they apply on first
-# boot. 'curl' is built into Linux, macOS and Windows 10+.
+# boot.
+#
+# The API calls use curl (built into Linux, macOS and Windows 10+) with its
+# options in a config file, so the command line has no quotes for cmd.exe /
+# PowerShell / sh to mangle. The files hold the API token and are kept in
+# .terraform/ (not committed).
 # ---------------------------------------------------------------------------
+locals {
+  api_base = "${trimsuffix(var.proxmox_endpoint, "/")}/api2/json/nodes"
+
+  curl_common = join("", [
+    "silent\nshow-error\nfail\n",
+    var.proxmox_insecure ? "insecure\n" : "",
+    "header = \"Authorization: PVEAPIToken=${var.proxmox_api_token}\"\n",
+  ])
+}
+
+resource "local_sensitive_file" "set_cloud_init" {
+  for_each = { for name, params in local.cloud_init_params : name => params if length(params) > 0 }
+
+  filename        = "${path.module}/.terraform/curl/${each.key}-cloud-init.txt"
+  file_permission = "0600"
+  content = join("", concat(
+    [local.curl_common, "request = \"PUT\"\n"],
+    [for p in each.value : "data-urlencode = \"${p}\"\n"],
+    ["url = \"${local.api_base}/${local.vms[each.key].node}/qemu/${proxmox_cloned_vm.this[each.key].id}/config\"\n"],
+  ))
+}
+
+resource "local_sensitive_file" "start" {
+  for_each = var.start_vms ? local.vms : {}
+
+  filename        = "${path.module}/.terraform/curl/${each.key}-start.txt"
+  file_permission = "0600"
+  content = join("", [
+    local.curl_common,
+    "request = \"POST\"\n",
+    "url = \"${local.api_base}/${each.value.node}/qemu/${proxmox_cloned_vm.this[each.key].id}/status/start\"\n",
+  ])
+}
+
 resource "terraform_data" "configure" {
   for_each = local.vms
 
@@ -129,17 +163,13 @@ resource "terraform_data" "configure" {
   triggers_replace = [proxmox_cloned_vm.this[each.key].id, local.cloud_init_params[each.key]]
 
   provisioner "local-exec" {
-    command = length(local.cloud_init_params[each.key]) == 0 ? "echo no cloud-init network settings" : join(" ", concat(
-      [local.curl, "-X PUT"],
-      [for p in local.cloud_init_params[each.key] : "--data-urlencode \"${p}\""],
-      ["\"${trimsuffix(var.proxmox_endpoint, "/")}/api2/json/nodes/${each.value.node}/qemu/${proxmox_cloned_vm.this[each.key].id}/config\""],
-    ))
+    command = contains(keys(local_sensitive_file.set_cloud_init), each.key) ? "curl -K ${try(local_sensitive_file.set_cloud_init[each.key].filename, "")}" : "echo no cloud-init network settings"
   }
 
   # A VM that is already running (e.g. after an IP change) just keeps
   # running; restart it to apply the new IP.
   provisioner "local-exec" {
-    command    = var.start_vms ? "${local.curl} -X POST \"${trimsuffix(var.proxmox_endpoint, "/")}/api2/json/nodes/${each.value.node}/qemu/${proxmox_cloned_vm.this[each.key].id}/status/start\"" : "echo not starting"
+    command    = var.start_vms ? "curl -K ${try(local_sensitive_file.start[each.key].filename, "")}" : "echo not starting"
     on_failure = continue
   }
 }
