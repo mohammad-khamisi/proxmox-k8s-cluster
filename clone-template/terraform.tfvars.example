@@ -8,6 +8,15 @@ node_name   = "hvir111d"
 template_id = 104
 datastore   = "iscsi-netapp"
 
+# Template 104's boot disk: scsi0, 50 GB. disk_gb = default size of every VM
+# (a VM can set its own disk_gb; never smaller than the template's 50).
+disk_interface   = "scsi0"
+template_disk_gb = 50
+disk_gb          = 50
+
+# Start the VMs once their IP is set.
+start_vms = true
+
 # DNS for all VMs (a VM can override with its own dns_servers / dns_domain).
 dns_servers = ["192.168.1.1", "8.8.8.8"]
 # dns_domain = "example.local"
@@ -15,7 +24,8 @@ dns_servers = ["192.168.1.1", "8.8.8.8"]
 # ---------------------------------------------------------------------------
 # VMs: key = VM name. Per network slot (net0 = first card): card settings and
 # the IP (cloud-init: "IP/prefix" or "dhcp"). Optional per slot: vlan_id,
-# mac_address, firewall, mtu. Optional per VM: node, dns_servers, dns_domain.
+# mac_address, firewall, mtu. Optional per VM: disk_gb, node, dns_servers,
+# dns_domain.
 # ---------------------------------------------------------------------------
 vms = {
   "k8s-jumpbox" = {
@@ -45,19 +55,22 @@ vms = {
   }
 
   "k8s-worker-1" = {
-    vm_id = 311
+    vm_id   = 311
+    disk_gb = 100
     networks = {
       net0 = { bridge = "vmbr1", model = "vmxnet3", ip = "192.168.1.71/24", gateway = "192.168.1.1" }
     }
   }
   "k8s-worker-2" = {
-    vm_id = 312
+    vm_id   = 312
+    disk_gb = 100
     networks = {
       net0 = { bridge = "vmbr1", model = "vmxnet3", ip = "192.168.1.72/24", gateway = "192.168.1.1" }
     }
   }
   "k8s-worker-3" = {
-    vm_id = 313
+    vm_id   = 313
+    disk_gb = 100
     networks = {
       net0 = { bridge = "vmbr1", model = "vmxnet3", ip = "192.168.1.73/24", gateway = "192.168.1.1" }
       # Second card, e.g. on a VLAN:

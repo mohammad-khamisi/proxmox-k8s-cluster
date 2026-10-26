@@ -39,6 +39,30 @@ variable "datastore" {
   default     = "iscsi-netapp"
 }
 
+variable "disk_interface" {
+  description = "The template's boot disk slot (template > Hardware)"
+  type        = string
+  default     = "scsi0"
+}
+
+variable "template_disk_gb" {
+  description = "Size of the template's disk; a clone's disk can't be smaller"
+  type        = number
+  default     = 50
+}
+
+variable "disk_gb" {
+  description = "Default disk size of the VMs in GB (a VM can override it)"
+  type        = number
+  default     = 50
+}
+
+variable "start_vms" {
+  description = "Start the VMs once they are configured"
+  type        = bool
+  default     = true
+}
+
 variable "dns_servers" {
   description = "Cloud-init DNS servers for all VMs (a VM can override them); empty = template's"
   type        = list(string)
@@ -58,8 +82,9 @@ variable "vms" {
     Slots not listed keep the template's settings.
   EOT
   type = map(object({
-    vm_id = number
-    node  = optional(string)
+    vm_id   = number
+    node    = optional(string)
+    disk_gb = optional(number) # default: disk_gb
     networks = optional(map(object({
       bridge      = string
       model       = optional(string) # virtio, vmxnet3, e1000
@@ -73,6 +98,11 @@ variable "vms" {
     dns_servers = optional(list(string))
     dns_domain  = optional(string)
   }))
+
+  validation {
+    condition     = alltrue([for vm in values(var.vms) : coalesce(vm.disk_gb, var.disk_gb) >= var.template_disk_gb])
+    error_message = "disk_gb can't be smaller than the template's disk (template_disk_gb)."
+  }
 
   validation {
     condition     = length(distinct([for vm in values(var.vms) : vm.vm_id])) == length(var.vms)
