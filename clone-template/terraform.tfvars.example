@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars and edit.
+
+proxmox_endpoint  = "https://192.168.1.10:8006/"
+proxmox_api_token = "terraform@pve!provider=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+proxmox_insecure  = true
+
+node_name   = "hvir111d"
+template_id = 104
+datastore   = "iscsi-netapp"
+
+vm_id   = 400
+vm_name = "clone-test"
