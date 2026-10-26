@@ -8,37 +8,60 @@ node_name   = "hvir111d"
 template_id = 104
 datastore   = "iscsi-netapp"
 
-vm_id   = 400
-vm_name = "clone-test"
-
-# ---------------------------------------------------------------------------
-# Network card(s), by slot. Slots not listed keep the template's settings
-# (template 104: net0 = vmxnet3 on vmbr1).
-# ---------------------------------------------------------------------------
-network_devices = {
-  net0 = {
-    bridge = "vmbr1"
-    model  = "vmxnet3"
-    # vlan_id     = 20
-    # mac_address = "BC:24:11:00:00:01"
-    # firewall    = false
-    # mtu         = 1500
-  }
-  # Second card:
-  # net1 = { bridge = "vmbr0", model = "virtio" }
-}
-
-# ---------------------------------------------------------------------------
-# IP address (cloud-init), by slot: net0 -> first card. Needs cloud-init
-# inside the template. address = "dhcp" or "IP/prefix".
-# ---------------------------------------------------------------------------
-ip_configs = {
-  net0 = {
-    address = "192.168.1.80/24"
-    gateway = "192.168.1.1"
-  }
-  # net0 = { address = "dhcp" }
-}
-
+# DNS for all VMs (a VM can override with its own dns_servers / dns_domain).
 dns_servers = ["192.168.1.1", "8.8.8.8"]
 # dns_domain = "example.local"
+
+# ---------------------------------------------------------------------------
+# VMs: key = VM name. Per network slot (net0 = first card): card settings and
+# the IP (cloud-init: "IP/prefix" or "dhcp"). Optional per slot: vlan_id,
+# mac_address, firewall, mtu. Optional per VM: node, dns_servers, dns_domain.
+# ---------------------------------------------------------------------------
+vms = {
+  "k8s-jumpbox" = {
+    vm_id = 300
+    networks = {
+      net0 = { bridge = "vmbr1", model = "vmxnet3", ip = "192.168.1.60/24", gateway = "192.168.1.1" }
+    }
+  }
+
+  "k8s-master-1" = {
+    vm_id = 301
+    networks = {
+      net0 = { bridge = "vmbr1", model = "vmxnet3", ip = "192.168.1.61/24", gateway = "192.168.1.1" }
+    }
+  }
+  "k8s-master-2" = {
+    vm_id = 302
+    networks = {
+      net0 = { bridge = "vmbr1", model = "vmxnet3", ip = "192.168.1.62/24", gateway = "192.168.1.1" }
+    }
+  }
+  "k8s-master-3" = {
+    vm_id = 303
+    networks = {
+      net0 = { bridge = "vmbr1", model = "vmxnet3", ip = "192.168.1.63/24", gateway = "192.168.1.1" }
+    }
+  }
+
+  "k8s-worker-1" = {
+    vm_id = 311
+    networks = {
+      net0 = { bridge = "vmbr1", model = "vmxnet3", ip = "192.168.1.71/24", gateway = "192.168.1.1" }
+    }
+  }
+  "k8s-worker-2" = {
+    vm_id = 312
+    networks = {
+      net0 = { bridge = "vmbr1", model = "vmxnet3", ip = "192.168.1.72/24", gateway = "192.168.1.1" }
+    }
+  }
+  "k8s-worker-3" = {
+    vm_id = 313
+    networks = {
+      net0 = { bridge = "vmbr1", model = "vmxnet3", ip = "192.168.1.73/24", gateway = "192.168.1.1" }
+      # Second card, e.g. on a VLAN:
+      # net1 = { bridge = "vmbr0", model = "virtio", vlan_id = 20, ip = "10.20.0.73/24" }
+    }
+  }
+}

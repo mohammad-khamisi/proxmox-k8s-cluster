@@ -16,7 +16,7 @@ variable "proxmox_insecure" {
 }
 
 variable "node_name" {
-  description = "Node the new VM is created on"
+  description = "Default node for the new VMs (each VM can override it with 'node')"
   type        = string
   default     = "hvir111d"
 }
@@ -28,7 +28,7 @@ variable "template_id" {
 }
 
 variable "template_node" {
-  description = "Node holding the template; empty = node_name"
+  description = "Node holding the template; empty = the VM's node"
   type        = string
   default     = ""
 }
@@ -39,65 +39,59 @@ variable "datastore" {
   default     = "iscsi-netapp"
 }
 
-variable "vm_id" {
-  description = "ID of the new VM; null = next free ID"
-  type        = number
-  default     = 400
-}
-
-variable "vm_name" {
-  type    = string
-  default = "clone-test"
-}
-
-# ---------------------------------------------------------------------------
-# Network
-# ---------------------------------------------------------------------------
-variable "network_devices" {
-  description = "Network cards by slot (net0, net1, ...). Slots not listed keep the template's settings."
-  type = map(object({
-    bridge      = string
-    model       = optional(string) # virtio, vmxnet3, e1000
-    vlan_id     = optional(number)
-    mac_address = optional(string) # omitted = new random MAC
-    firewall    = optional(bool)
-    mtu         = optional(number)
-  }))
-  default = {}
-
-  validation {
-    condition     = alltrue([for k in keys(var.network_devices) : can(regex("^net[0-9]+$", k))])
-    error_message = "network_devices keys must be slot names like net0, net1."
-  }
-}
-
-variable "ip_configs" {
-  description = "Cloud-init IP per slot (net0 -> ipconfig0). address = 'dhcp' or CIDR like 192.168.1.80/24. Empty = template's."
-  type = map(object({
-    address = string
-    gateway = optional(string)
-  }))
-  default = {}
-
-  validation {
-    condition     = alltrue([for k in keys(var.ip_configs) : can(regex("^net[0-9]+$", k))])
-    error_message = "ip_configs keys must be slot names like net0, net1."
-  }
-
-  validation {
-    condition     = alltrue([for c in values(var.ip_configs) : c.address == "dhcp" || can(cidrhost(c.address, 0))])
-    error_message = "address must be 'dhcp' or an IP with prefix, e.g. 192.168.1.80/24."
-  }
-}
-
 variable "dns_servers" {
-  description = "Cloud-init DNS servers; empty = template's"
+  description = "Cloud-init DNS servers for all VMs (a VM can override them); empty = template's"
   type        = list(string)
   default     = []
 }
 
 variable "dns_domain" {
-  description = "Cloud-init search domain; empty = template's"
+  description = "Cloud-init search domain for all VMs (a VM can override it); empty = template's"
   type        = string
   default     = ""
+}
+
+variable "vms" {
+  description = <<-EOT
+    VMs to create, keyed by VM name. 'networks' is keyed by slot (net0, net1, ...):
+    network card settings plus an optional cloud-init IP ('dhcp' or IP/prefix).
+    Slots not listed keep the template's settings.
+  EOT
+  type = map(object({
+    vm_id = number
+    node  = optional(string)
+    networks = optional(map(object({
+      bridge      = string
+      model       = optional(string) # virtio, vmxnet3, e1000
+      vlan_id     = optional(number)
+      mac_address = optional(string) # omitted = new random MAC
+      firewall    = optional(bool)
+      mtu         = optional(number)
+      ip          = optional(string) # "dhcp" or "192.168.1.61/24"; omitted = template's
+      gateway     = optional(string)
+    })), {})
+    dns_servers = optional(list(string))
+    dns_domain  = optional(string)
+  }))
+
+  validation {
+    condition     = length(distinct([for vm in values(var.vms) : vm.vm_id])) == length(var.vms)
+    error_message = "Every VM needs its own vm_id."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for vm in values(var.vms) : [for slot in keys(vm.networks) : can(regex("^net[0-9]+$", slot))]
+    ]))
+    error_message = "networks keys must be slot names like net0, net1."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for vm in values(var.vms) : [
+        for n in values(vm.networks) : n.ip == null || n.ip == "dhcp" || can(cidrhost(n.ip, 0))
+      ]
+    ]))
+    error_message = "ip must be 'dhcp' or an IP with prefix, e.g. 192.168.1.61/24."
+  }
 }
