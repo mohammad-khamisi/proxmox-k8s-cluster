@@ -1,0 +1,23 @@
+# Managed by Ansible
+{% if rke2_join | bool %}
+server: https://{{ hostvars[groups['masters'][0]].ansible_host }}:9345
+token: {{ rke2_token }}
+{% endif %}
+node-name: {{ inventory_hostname }}
+node-ip: {{ ansible_host }}
+{% if rke2_type == 'server' %}
+write-kubeconfig-mode: "0600"
+cni: {{ rke2_cni }}
+tls-san:
+{% for san in ([rke2_api_endpoint] if rke2_api_endpoint else []) + rke2_extra_tls_san %}
+  - {{ san }}
+{% endfor %}
+{% for host in groups['masters'] %}
+  - {{ hostvars[host].ansible_host }}
+  - {{ host }}
+{% endfor %}
+{% if rke2_taint_masters | bool %}
+node-taint:
+  - CriticalAddonsOnly=true:NoExecute
+{% endif %}
+{% endif %}

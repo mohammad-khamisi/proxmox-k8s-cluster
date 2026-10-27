@@ -14,6 +14,8 @@ Terraform برای ساخت یک کلاستر Kubernetes با **RKE2 `v1.36.5+rk
                   └──ssh──► همه‌ی نودها
 ```
 
+> نصب کلاستر با Ansible روی VM های موجود (از jumpbox): پوشه‌ی [`ansible-rke2/`](ansible-rke2/).
+>
 > فقط می‌خواهید یک کلون ساده از تمپلیت بسازید، بدون هیچ تغییری؟ پوشه‌ی [`clone-template/`](clone-template/) را ببینید.
 
 ## چه کار می‌کند

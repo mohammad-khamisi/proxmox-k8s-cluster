@@ -1,0 +1,41 @@
+# SSH user on the nodes (the cloud-init user) and its private key on the jumpbox.
+ansible_user: user1
+ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+
+# ---------------------------------------------------------------------------
+# RKE2
+# ---------------------------------------------------------------------------
+rke2_version: v1.36.5+rke2r1
+
+# 'tar' works on any distro; 'rpm' needs RKE2 RPMs for EL10.
+rke2_install_method: tar
+
+# canal, calico, cilium or flannel
+rke2_cni: canal
+
+# DNS name or VIP in front of the masters (load balancer / kube-vip). It is
+# added to the API certificate and used in the kubeconfig. Empty = the first
+# master's IP.
+rke2_api_endpoint: ""
+
+# Extra names/IPs for the API certificate.
+rke2_extra_tls_san: []
+
+# Keep normal workloads off the masters.
+rke2_taint_masters: true
+
+# The tar install has no rke2-selinux policy, so SELinux goes to permissive.
+selinux_permissive: true
+
+# ---------------------------------------------------------------------------
+# Disk: RKE2 keeps images and data in /var/lib/rancher. The template's /var
+# LV is only ~4 GB, so it gets the free space of its volume group (after the
+# partition is grown to the disk size). Set to false to leave /var alone.
+# ---------------------------------------------------------------------------
+grow_var: true
+
+# ---------------------------------------------------------------------------
+# Jumpbox tools
+# ---------------------------------------------------------------------------
+kubectl_version: "{{ rke2_version.split('+')[0] }}"
+helm_version: v3.19.0

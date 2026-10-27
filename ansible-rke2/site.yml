@@ -1,0 +1,47 @@
+# Installs an RKE2 cluster: masters (server) and workers (agent), then sets up
+# kubectl, helm and the kubeconfig on the machine running Ansible (the jumpbox).
+#
+#   ansible-playbook site.yml
+
+- name: Prepare the nodes
+  hosts: rke2
+  become: true
+  tasks:
+    - ansible.builtin.import_tasks: tasks/prepare.yml
+  handlers:
+    - ansible.builtin.import_tasks: tasks/handlers.yml
+
+- name: First master (bootstraps the cluster and etcd)
+  hosts: masters[0]
+  become: true
+  tasks:
+    - ansible.builtin.import_tasks: tasks/rke2.yml
+      vars:
+        rke2_type: server
+        rke2_join: false
+
+- name: Other masters (one at a time, so etcd grows safely)
+  hosts: masters[1:]
+  become: true
+  serial: 1
+  tasks:
+    - ansible.builtin.import_tasks: tasks/rke2.yml
+      vars:
+        rke2_type: server
+        rke2_join: true
+
+- name: Workers
+  hosts: workers
+  become: true
+  tasks:
+    - ansible.builtin.import_tasks: tasks/rke2.yml
+      vars:
+        rke2_type: agent
+        rke2_join: true
+
+- name: Jumpbox tools and kubeconfig
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  tasks:
+    - ansible.builtin.import_tasks: tasks/jumpbox.yml

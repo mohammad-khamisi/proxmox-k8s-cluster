@@ -1,0 +1,77 @@
+# kubectl (same version as the cluster), helm and the kubeconfig for the user
+# running Ansible on the jumpbox.
+
+- name: Paths
+  ansible.builtin.set_fact:
+    jumpbox_home: "{{ lookup('env', 'HOME') }}"
+    jumpbox_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts.architecture] }}"
+    api_endpoint: "{{ rke2_api_endpoint if rke2_api_endpoint else hostvars[groups['masters'][0]].ansible_host }}"
+
+- name: kubectl {{ kubectl_version }}
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/{{ jumpbox_arch }}/kubectl"
+    checksum: "sha256:https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/{{ jumpbox_arch }}/kubectl.sha256"
+    dest: /usr/local/bin/kubectl
+    mode: "0755"
+  become: true
+
+- name: Download helm {{ helm_version }}
+  ansible.builtin.get_url:
+    url: "https://get.helm.sh/helm-{{ helm_version }}-linux-{{ jumpbox_arch }}.tar.gz"
+    dest: "/var/tmp/helm-{{ helm_version }}.tar.gz"
+    mode: "0644"
+
+- name: Unpack helm
+  ansible.builtin.unarchive:
+    src: "/var/tmp/helm-{{ helm_version }}.tar.gz"
+    dest: /var/tmp
+    remote_src: true
+
+- name: Install helm
+  ansible.builtin.copy:
+    src: "/var/tmp/linux-{{ jumpbox_arch }}/helm"
+    dest: /usr/local/bin/helm
+    remote_src: true
+    mode: "0755"
+  become: true
+
+- name: Shell completion and alias k=kubectl
+  ansible.builtin.shell: |
+    kubectl completion bash > /etc/bash_completion.d/kubectl
+    helm completion bash > /etc/bash_completion.d/helm
+    printf 'alias k=kubectl\ncomplete -o default -F __start_kubectl k\n' > /etc/profile.d/k8s-aliases.sh
+  args:
+    creates: /etc/profile.d/k8s-aliases.sh
+  become: true
+
+- name: Read the kubeconfig from the first master
+  ansible.builtin.slurp:
+    src: /etc/rancher/rke2/rke2.yaml
+  delegate_to: "{{ groups['masters'][0] }}"
+  become: true
+  register: rke2_kubeconfig
+
+- name: ~/.kube
+  ansible.builtin.file:
+    path: "{{ jumpbox_home }}/.kube"
+    state: directory
+    mode: "0700"
+
+- name: ~/.kube/config (pointing at the API endpoint)
+  ansible.builtin.copy:
+    dest: "{{ jumpbox_home }}/.kube/config"
+    mode: "0600"
+    content: "{{ rke2_kubeconfig.content | b64decode | replace('https://127.0.0.1:6443', 'https://' ~ api_endpoint ~ ':6443') }}"
+
+- name: Wait for all nodes to be Ready
+  ansible.builtin.command: kubectl wait --for=condition=Ready nodes --all --timeout=15m
+  changed_when: false
+
+- name: Nodes
+  ansible.builtin.command: kubectl get nodes -o wide
+  register: nodes
+  changed_when: false
+
+- name: Show nodes
+  ansible.builtin.debug:
+    var: nodes.stdout_lines

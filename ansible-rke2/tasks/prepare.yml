@@ -1,0 +1,135 @@
+# OS preparation for RKE2 on Rocky Linux / RHEL. Only ansible-core modules.
+
+- name: Hostname
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Cluster hosts in /etc/hosts
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: "# {mark} rke2-cluster (ansible)"
+    block: |
+      {% for host in groups['rke2'] %}
+      {{ hostvars[host].ansible_host }} {{ host }}
+      {% endfor %}
+
+- name: Packages
+  ansible.builtin.dnf:
+    name:
+      - curl
+      - tar
+      - lvm2
+      - cloud-utils-growpart
+      - iptables-nft
+    state: present
+
+# --- Disk: grow the LVM partition to the disk, then /var -------------------
+- name: Grow the LVM partition and /var
+  ansible.builtin.shell: |
+    set -eu
+    var_dev=$(findmnt -n -o SOURCE /var || true)
+    case "$var_dev" in /dev/mapper/*) ;; *) echo "/var is not on LVM, skipped"; exit 0 ;; esac
+    vg=$(lvs --noheadings -o vg_name "$var_dev" | tr -d ' ')
+    pv=$(pvs --noheadings -o pv_name -S vg_name="$vg" | head -n1 | tr -d ' ')
+    disk="/dev/$(lsblk -no pkname "$pv")"
+    part="${pv##*[!0-9]}"
+    growpart "$disk" "$part" >/dev/null 2>&1 && echo "partition grown" || true
+    pvresize "$pv" >/dev/null
+    free=$(vgs --noheadings -o vg_free_count "$vg" | tr -d ' ')
+    if [ "$free" -gt 0 ]; then
+      lvextend -r -l +100%FREE "$var_dev" >/dev/null
+      echo "/var extended"
+    fi
+    df -h /var | tail -n1
+  args:
+    executable: /bin/bash
+  register: grow_var_result
+  changed_when: "'extended' in grow_var_result.stdout or 'grown' in grow_var_result.stdout"
+  when: grow_var | bool
+
+- name: Show /var
+  ansible.builtin.debug:
+    msg: "{{ grow_var_result.stdout_lines | default([]) | last | default('') }}"
+  when: grow_var | bool
+
+# --- Kubernetes prerequisites ----------------------------------------------
+- name: Swap off now
+  ansible.builtin.command: swapoff -a
+  when: ansible_facts.swaptotal_mb | int > 0
+  changed_when: true
+
+- name: Swap off at boot
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s.*)$'
+    replace: '# \1'
+
+- name: Service facts
+  ansible.builtin.service_facts:
+
+- name: firewalld off (it conflicts with the CNI rules)
+  ansible.builtin.systemd_service:
+    name: firewalld
+    state: stopped
+    enabled: false
+  when: "'firewalld.service' in ansible_facts.services"
+
+- name: nm-cloud-setup off
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: [nm-cloud-setup.service, nm-cloud-setup.timer]
+  when: item in ansible_facts.services
+
+- name: SELinux permissive now
+  ansible.builtin.command: setenforce 0
+  when:
+    - selinux_permissive | bool
+    - ansible_facts.selinux.status == 'enabled'
+    - ansible_facts.selinux.mode == 'enforcing'
+  changed_when: true
+
+- name: SELinux permissive at boot
+  ansible.builtin.lineinfile:
+    path: /etc/selinux/config
+    regexp: '^SELINUX='
+    line: SELINUX=permissive
+  when: selinux_permissive | bool
+
+- name: Keep NetworkManager away from the CNI interfaces
+  ansible.builtin.copy:
+    dest: /etc/NetworkManager/conf.d/rke2-cni.conf
+    mode: "0644"
+    content: |
+      [keyfile]
+      unmanaged-devices=interface-name:flannel*;interface-name:cali*;interface-name:tunl*;interface-name:vxlan.calico;interface-name:vxlan-v6.calico;interface-name:wireguard.cali;interface-name:wg-v6.cali;interface-name:cilium*
+  notify: Reload NetworkManager
+
+- name: Kernel modules at boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/rke2.conf
+    mode: "0644"
+    content: |
+      overlay
+      br_netfilter
+
+- name: Kernel modules now
+  ansible.builtin.command: "modprobe {{ item }}"
+  loop: [overlay, br_netfilter]
+  changed_when: false
+
+- name: Sysctl
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/90-rke2.conf
+    mode: "0644"
+    content: |
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward                 = 1
+      fs.inotify.max_user_instances       = 8192
+      fs.inotify.max_user_watches         = 524288
+  notify: Reload sysctl
+
+- name: Apply handlers before installing RKE2
+  ansible.builtin.meta: flush_handlers

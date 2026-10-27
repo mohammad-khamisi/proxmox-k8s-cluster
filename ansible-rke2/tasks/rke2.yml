@@ -1,0 +1,80 @@
+# Installs and starts RKE2. Vars: rke2_type (server|agent), rke2_join (bool).
+
+- name: Cluster join token from the first master
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/rke2/server/token
+  delegate_to: "{{ groups['masters'][0] }}"
+  register: rke2_token_file
+  when: rke2_join | bool
+
+- name: /etc/rancher/rke2
+  ansible.builtin.file:
+    path: /etc/rancher/rke2
+    state: directory
+    mode: "0755"
+
+- name: RKE2 config
+  ansible.builtin.template:
+    src: templates/config.yaml.j2
+    dest: /etc/rancher/rke2/config.yaml
+    mode: "0600"
+  vars:
+    rke2_token: "{{ (rke2_token_file.content | b64decode | trim) if rke2_join | bool else '' }}"
+  register: rke2_config
+
+- name: Installed RKE2 version
+  ansible.builtin.shell: PATH="$PATH:/usr/local/bin:/opt/rke2/bin" rke2 --version
+  register: rke2_installed
+  changed_when: false
+  failed_when: false
+
+- name: Install RKE2 {{ rke2_version }}
+  when: rke2_version not in rke2_installed.stdout | default('')
+  block:
+    - name: Download the install script
+      ansible.builtin.get_url:
+        url: https://get.rke2.io
+        dest: /root/rke2-install.sh
+        mode: "0700"
+        force: true
+
+    - name: Run the install script
+      ansible.builtin.command: sh /root/rke2-install.sh
+      environment:
+        INSTALL_RKE2_VERSION: "{{ rke2_version }}"
+        INSTALL_RKE2_TYPE: "{{ rke2_type }}"
+        INSTALL_RKE2_METHOD: "{{ rke2_install_method }}"
+        TMPDIR: /var/tmp
+      changed_when: true
+
+# Waits until the node has joined (the unit only reports 'started' then).
+# Joining can fail while the cluster is still settling, so retry.
+- name: Start rke2-{{ rke2_type }}
+  ansible.builtin.systemd_service:
+    name: "rke2-{{ rke2_type }}"
+    enabled: true
+    state: "{{ 'restarted' if rke2_config.changed else 'started' }}"
+    daemon_reload: true
+  register: rke2_service
+  retries: 5
+  delay: 30
+  until: rke2_service is succeeded
+
+- name: kubectl for root on the masters
+  ansible.builtin.copy:
+    dest: /etc/profile.d/rke2.sh
+    mode: "0644"
+    content: |
+      export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+      export CRI_CONFIG_FILE=/var/lib/rancher/rke2/agent/etc/crictl.yaml
+      export PATH="$PATH:/var/lib/rancher/rke2/bin"
+  when: rke2_type == 'server'
+
+- name: Wait for the API server
+  ansible.builtin.command: /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml get --raw=/readyz
+  register: rke2_ready
+  retries: 60
+  delay: 10
+  until: rke2_ready.rc == 0
+  changed_when: false
+  when: rke2_type == 'server'
