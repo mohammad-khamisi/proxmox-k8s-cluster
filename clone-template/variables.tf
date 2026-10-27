@@ -28,7 +28,7 @@ variable "template_id" {
 }
 
 variable "template_node" {
-  description = "Node holding the template; empty = the VM's node"
+  description = "Node holding the template; empty = node_name. VMs on other nodes are cloned from there (the template's disks must be on shared storage)."
   type        = string
   default     = ""
 }

@@ -74,7 +74,7 @@ resource "proxmox_cloned_vm" "this" {
 
   clone = {
     source_vm_id     = var.template_id
-    source_node_name = var.template_node != "" ? var.template_node : null
+    source_node_name = var.template_node != "" ? var.template_node : var.node_name
     full             = true
     target_datastore = var.datastore != "" ? var.datastore : null
   }

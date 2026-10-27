@@ -45,6 +45,8 @@ vms = [
 | `dns_servers`، `dns_domain` | DNS |
 | `extra_networks` | کارت‌های اضافه: `net1`، `net2`، ... |
 
+برای پخش کردن VM ها روی چند نود Proxmox، به هر خط `node` اضافه کنید (پایین‌تر: «پخش روی چند نود»).
+
 مثال:
 
 ```hcl
@@ -52,6 +54,32 @@ vms = [
   { name = "two-cards", vm_id = 321, ip = "192.168.1.80",
     extra_networks = { net1 = { bridge = "vmbr0", vlan_id = 30, ip = "10.30.0.80/24" } } },
 ```
+
+## پخش روی چند نود
+
+`node_name` نود پیش‌فرض است (و نودی که تمپلیت روی آن است). برای هر VM که باید روی نود دیگری باشد `node` بنویسید:
+
+```hcl
+node_name = "hvir111d"   # تمپلیت روی این نود است
+
+vms = [
+  { name = "k8s-jumpbox",  vm_id = 300, ip = "10.100.128.60" },
+  { name = "k8s-master-1", vm_id = 301, ip = "10.100.128.61", node = "hvir111d" },
+  { name = "k8s-master-2", vm_id = 302, ip = "10.100.128.62", node = "hvir211d" },
+  { name = "k8s-master-3", vm_id = 303, ip = "10.100.128.63", node = "hvir213d" },
+  { name = "k8s-worker-1", vm_id = 311, ip = "10.100.128.71", node = "hvir111d", disk_gb = 100 },
+  { name = "k8s-worker-2", vm_id = 312, ip = "10.100.128.72", node = "hvir211d", disk_gb = 100 },
+  { name = "k8s-worker-3", vm_id = 313, ip = "10.100.128.73", node = "hvir213d", disk_gb = 100 },
+]
+```
+
+هر سه master روی سه نود جدا باشند تا با خاموش شدن یک نود، etcd و API از کار نیفتند. ورکرها هم همین‌طور.
+
+شرط‌ها:
+
+- تمپلیت از نود خودش (`node_name`، یا `template_node` اگر جداست) کلون می‌شود؛ دیسک‌های تمپلیت و `datastore` باید **shared** باشند و روی همه‌ی نودها دیده شوند (`iscsi-netapp` در Datacenter ← Storage باید تیک Shared و همه‌ی نودها را داشته باشد).
+- بریج (`network_bridge`، مثلاً `vlan2514`) باید با **همین اسم** روی هر سه نود وجود داشته باشد.
+- تغییر `node` یک VM موجود، آن را پاک می‌کند و روی نود جدید از نو می‌سازد.
 
 ## درباره‌ی IP
 
@@ -83,7 +111,7 @@ terraform destroy
 |-------|---------|-------|
 | `template_id` | `104` | تمپلیت مبدأ |
 | `node_name` | `hvir111d` | نود پیش‌فرض VM ها |
-| `template_node` | خالی | نود تمپلیت، اگر با نود VM فرق دارد |
+| `template_node` | خالی | نود تمپلیت؛ خالی = `node_name`. VM های نودهای دیگر از همین نود کلون می‌شوند |
 | `datastore` | `iscsi-netapp` | محل دیسک‌های کلون؛ خالی = همان datastore تمپلیت |
 | `disk_gb` | `50` | اندازه‌ی پیش‌فرض دیسک VM ها |
 | `template_disk_gb` | `50` | اندازه‌ی دیسک تمپلیت (حداقل مجاز) |

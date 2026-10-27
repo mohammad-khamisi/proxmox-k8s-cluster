@@ -32,6 +32,8 @@ dns_servers = ["192.168.1.1", "8.8.8.8"]
 
 # ---------------------------------------------------------------------------
 # VMs: one line each. ip = "192.168.1.61", "192.168.1.61/24" or "dhcp".
+# Spread over several Proxmox nodes with node = "hvir211d" etc. (the template
+# is cloned from node_name; its storage must be shared).
 # Optional per VM (overrides the defaults above): disk_gb, node, bridge,
 # model, vlan_id, gateway, mac_address, firewall, mtu, dns_servers,
 # dns_domain, extra_networks.
